@@ -1,0 +1,337 @@
+package deque // import "github.com/lucasgdosr/deque"
+
+
+VARIABLES
+
+var ErrNegativeCapacity = errors.New("capacity cannot be negative")
+    ErrNegativeCapacity is returned when trying to resize a Deque to a negative
+    capacity.
+
+var ErrNotEnoughCapacity = errors.New("cannot hold existing elements in asked capacity")
+    ErrNotEnoughCapacity is returned when trying to resize a Deque to a capacity
+    that cannot hold its existing elements.
+
+var ErrSameCapacity = errors.New("already at asked capacity")
+    ErrSameCapacity is returned when trying to resize a Deque to its current
+    capacity.
+
+
+FUNCTIONS
+
+func Contains[T comparable](d *Deque[T], t T) bool
+    Contains returns whether the element is in the Deque. This must not be
+    a method, otherwise Deque would be constrained to comparable elements.
+    It has the same semantics as slices.Contains.
+
+func Equal[T comparable](d1 *Deque[T], d2 *Deque[T]) bool
+    Equal returns whether both Deques have the same length and the same elements
+    in the same order. Two nil Deques are equal, but an empty Deque and nil
+    are not. This must not be a method, otherwise Deque would be constrained to
+    comparable elements. Equal's semantics differs from slices.Equal in the nil
+    vs empty comparison.
+
+func Index[T comparable](d *Deque[T], t T) int
+    Index returns the index of the first ocurrence of t in the Deque or -1
+    if absent. It cannot be a method, otherwise Deque would be constrained to
+    comparable elements only. Index has the same semantics as slices.Index.
+
+func Max[T cmp.Ordered](d *Deque[T]) T
+    Max returns the maximum element in the queue. It must not be a method,
+    otherwise Deque would be constrained to comparable elements only. It has the
+    same semantics as slices.Max, so it panics on an empty Deque.
+
+func MaxFunc[T cmp.Ordered](d *Deque[T], cmp func(T, T) int) T
+    MaxFunc returns the maximum element in the queue. It must not be a method,
+    otherwise Deque would be constrained to comparable elements only. It has the
+    same semantics as slices.MaxFunc, so it panics on an empty Deque.
+
+func Min[T cmp.Ordered](d *Deque[T]) T
+    Min returns the minimum element in the queue. It must not be a method,
+    otherwise Deque would be constrained to comparable elements only. It has the
+    same semantics as slices.Min, so it panics on an empty Deque.
+
+func MinFunc[T cmp.Ordered](d *Deque[T], cmp func(T, T) int) T
+    MinFunc returns the minimum element in the queue. It must not be a method,
+    otherwise Deque would be constrained to comparable elements only. It has the
+    same semantics as slices.MinFunc, so it panics on an empty Deque.
+
+
+TYPES
+
+type Deque[T any] struct {
+	// Has unexported fields.
+}
+    Deque is a double-ended queue that can be used for either LIFO or FIFO
+    ordering, or something in between.
+
+    To create a Deque instance, you must use one of the available constructors,
+    MakeDeque(), MakeDequeWithCapacity(cap), or CopySliceToDeque(s). nil Deques
+    panic when called, except for Len. Creating a Deque in the following way is
+    wrong:
+
+        var deque Deque[int] // wrong
+
+    This implementation requires a buffer with a power of two length. If a Deque
+    ever overflows its underlying buffer, it reallocates to twice the size.
+    It does not shrink by default, so you must explicitly call a method to
+    shrink it.
+
+func CopySliceToDeque[T any](s []T) *Deque[T]
+    CopySliceToDeque takes in a slice, allocates a new buffer rounding len(s) to
+    the next power of two, and copies every element of the slice to the Deque.
+    The slice's capacity is irrelevant to CopySliceToDeque, and memory is not
+    shared.
+
+func MakeDeque[T any]() *Deque[T]
+    MakeDeque allocates a default sized buffer for a Deque.
+
+func MakeDequeWithCapacity[T any](capacity int) (*Deque[T], error)
+    MakeDequeWithCapacity takes in the desired capacity. Note that if the
+    supplied capacity is not a power of two, it will be increased to the next
+    power of two. Returns an error if passed a negative value.
+
+func (d *Deque[T]) All() iter.Seq2[int, T]
+    All returns an iterator over index-value pairs in order. It has the same
+    semantics as slices.All. If you don't need indexes, use Iter instead.
+    Does not panic if modified during iteration.
+
+func (d *Deque[T]) At(i int) T
+    At indexes into the i-th position in the Deque. Panics if out of bounds.
+
+func (d *Deque[T]) AtUnsafe(i int) T
+    AtUnsafe indexes into the i-th position in the Deque. It never panics,
+    but returns garbage if i is out of bounds.
+
+func (d *Deque[T]) Cap() int
+    Cap returns the current Deque capacity.
+
+func (d *Deque[T]) ClearEager()
+    ClearEager empties the Deque in O(d.Len()), zeroing existing elements and
+    maintaining capacity. This is useful for reusing a Deque with references.
+
+func (d *Deque[T]) ClearLazy()
+    ClearLazy empties the Deque in O(1), but does not zero the elements. If
+    references remain, the memory they point to will not be garbage collected.
+    Capacity is retained. This is useful for reusing a Deque with no references.
+
+func (d *Deque[T]) ContainsFunc(f func(T) bool) bool
+    ContainsFunc returns whether an element satisfying f is in the Deque.
+    It has the same semantics as slices.ContainsFunc.
+
+func (d *Deque[T]) CopySlice(start int, buf []T) int
+    CopySlice has the same semantics as the copy() built-in function. It copies
+    elements in the Deque starting at the start index up until the buffer is
+    full or the Deque is over, whichever happens first.
+
+    CopySlice returns the number of elements copied, which will be the minimum
+    of len(buf) and d.Len().
+
+func (d *Deque[T]) DropBack(n int)
+    DropBack removes the n last elements of the deque in O(1), but doesn't clear
+    references. If the Deque has fewer than n elements, it drops every element.
+    If n is negative, no element is dropped. If your elements have references,
+    prefer DropBackZero, which takes O(n).
+
+func (d *Deque[T]) DropBackZero(n int)
+    DropBackZero removes the n last elements of the deque in O(n) and clears
+    references, allowing garbage collection to occur. If the Deque has fewer
+    than n elements, it drops every element. If your elements don't have
+    references, prefer DropBack, which takes O(1).
+
+func (d *Deque[T]) DropFront(n int)
+    DropFront removes the n first elements of the deque in O(1), but doesn't
+    clear references. If the Deque has fewer than n elements, it drops every
+    element. If n is negative, no element is dropped. If your elements have
+    references, prefer DropFrontZero, which takes O(n).
+
+func (d *Deque[T]) DropFrontZero(n int)
+    DropFrontZero removes the n first elements of the deque in O(n) and clears
+    references, allowing garbage collection to occur. If the Deque has fewer
+    than n elements, it drops every element. If your elements don't have
+    references, prefer DropFront, which takes O(1).
+
+func (d *Deque[T]) Empty() bool
+    Empty returns whether the Deque is empty.
+
+func (d1 *Deque[T]) EqualFunc(d2 *Deque[T], f func(T, T) bool) bool
+    EqualFunc returns whether both Deques have the same length and the same
+    elements in the same order. Two nil Deques are equal, but an empty Deque and
+    nil are not. EqualFunc's semantics differs from slices.EqualFunc in the nil
+    vs empty comparison.
+
+func (d *Deque[T]) ForEach(f func(T) bool)
+    ForEach takes in a function that returns a bool and calls it in order for
+    every element in the queue, or until the first call that returns false.
+
+func (d *Deque[T]) Full() bool
+    Full returns whether the Deque is full. Pushing to a full Deque reallocates.
+
+func (d *Deque[T]) IndexFunc(f func(T) bool) int
+    IndexFunc returns the index of the first element that satisfies f
+    in the Deque or -1 if none do. IndexFunc has the same semantics as
+    slices.IndexFunc.
+
+func (d *Deque[T]) Iter() iter.Seq[T]
+    Iter returns an iterator over values only in order. If you need indexes,
+    use All instead. Does not panic if the Deque is modified during iteration.
+
+func (d *Deque[T]) Len() int
+    Len returns the number of elements in the Deque or 0 if nil.
+
+func (d *Deque[T]) MakeSliceCopy() []T
+    MakeSliceCopy allocates a slice to hold every Deque element and copies them.
+    Prefer passing a buffer to CopyToSlice for memory reuse.
+
+func (d *Deque[T]) MakeSliceIndexCopy(start, end int) []T
+    MakeSliceIndexCopy allocates a slice and copies the contents from the start
+    index (inclusive) to the end index (non-inclusive). This is regular slice
+    semantics, except it's a copy, and doesn't share memory with the Deque.
+    This means it also panics with invalid indexes.
+
+    Prefer passing a buffer to CopyToSlice for memory reuse.
+
+func (d *Deque[T]) MakeSliceIndexCopyWithCapacity(start, end, capacity int) []T
+    MakeSliceIndexCopyWithCapacity allocates a slice and copies the contents
+    from the start index (inclusive) to the end index (non-inclusive). This is
+    regular slice semantics, except it's a copy, and doesn't share memory with
+    the Deque. This means it also panics with invalid indexes.
+
+    Use this method when you need to append to the slice after copying it.
+    Prefer passing a subslice of a buffer to CopyToSlice for memory reuse.
+
+func (d *Deque[T]) PeekBack() (t T, ok bool)
+    PeekBack returns the last element in the Deque. If the Deque is empty,
+    it returns false.
+
+func (d *Deque[T]) PeekBackUnsafe() T
+    PeekBackUnsafe returns the last element in the Deque. Does not panic,
+    but worse: silently returns garbage.
+
+func (d *Deque[T]) PeekFront() (t T, ok bool)
+    PeekFront returns the first element in the Deque. If the Deque is empty,
+    it returns false.
+
+func (d *Deque[T]) PeekFrontUnsafe() T
+    PeekFrontUnsafe returns the first element in the Deque. Does not panic,
+    but worse: silently returns garbage.
+
+func (d *Deque[T]) PopBack() (t T, ok bool)
+    PopBack removes the last element in the Deque and returns it. If it's empty,
+    returns false. This does not zero the element, so references remain and
+    the garbage collector does not free. If your elements have references,
+    prefer PopBackZero. PopBack is mainly used for LIFO ordering in types with
+    no references.
+
+func (d *Deque[T]) PopBackShrink() (t T, ok bool)
+    PopBackShrink removes the last element in the Deque and returns it.
+    If it's empty, false is returned. If the Deque is at <= 25% capacity,
+    it is shrunk to <= 50% capacity.
+
+    It is more efficient to call PopBackShrink only once, when you're done
+    popping, to avoid multiple reallocations. It is also more efficient to avoid
+    calling this method when you might push many elements, which might require
+    growing the Deque back.
+
+func (d *Deque[T]) PopBackUnsafe() T
+    PopBackUnsafe removes the last element in the Deque and returns it. It does
+    not zero the element, which means if the type has references, they will leak
+    memory. Prefer PopBackZeroUnsafe if your type has references. Calling this
+    method with an empty Deque leads to undefined behavior from then on.
+
+func (d *Deque[T]) PopBackZero() (t T, ok bool)
+    PopBackZero removes the last element in the Deque, zeroes its slot, and
+    returns it. If it's empty, returns false. This is useful to clear references
+    that the underlying element might hold. If your elements have references,
+    this is how you should use the Deque for LIFO ordering.
+
+func (d *Deque[T]) PopBackZeroUnsafe() T
+    PopBackZeroUnsafe removes the last element in the Deque and returns it. The
+    element is zeroed, clearing references and making it available for garbage
+    collection. If your elements don't have references, prefer PopFrontUnsafe.
+    Calling this method with an empty Deque leads to undefined behavior from
+    then on.
+
+func (d *Deque[T]) PopFront() (t T, ok bool)
+    PopFront removes the first element in the Deque and returns it. If it's
+    empty, returns false. This does not zero the element, so references remain
+    and the garbage collector does not free. If your elements have references,
+    prefer PopFrontZero. PopFront is mainly used for FIFO ordering in types with
+    no references.
+
+func (d *Deque[T]) PopFrontShrink() (t T, ok bool)
+    PopFrontShrink removes the first element in the Deque and returns it.
+    If it's empty, false is returned. If the Deque is at <= 25% capacity,
+    it is shrunk to <= 50% capacity.
+
+    It is more efficient to call PopFrontShrink only once, when you're done
+    popping, to avoid multiple reallocations. It is also more efficient to avoid
+    calling this method when you might push many elements, which might require
+    growing the Deque back.
+
+func (d *Deque[T]) PopFrontUnsafe() T
+    PopFrontUnsafe removes the first element in the Deque and returns it. The
+    element is not zeroed, avoiding garbage collection of elements containing
+    references. If your elements have references, prefer PopFrontZeroUnsafe.
+    Calling this method with an empty Deque leads to undefined behavior from
+    then on.
+
+func (d *Deque[T]) PopFrontZero() (t T, ok bool)
+    PopFrontZero removes the first element in the Deque, zeroes its slot, and
+    returns it. If it's empty, returns false. This is useful to clear references
+    that the underlying element might hold. If your elements have references,
+    this is how you should use the Deque for FIFO ordering.
+
+func (d *Deque[T]) PopFrontZeroUnsafe() T
+    PopFrontZeroUnsafe removes the first element in the Deque and returns it.
+    The element is zeroed, clearing references and making it available
+    for garbage collection. If your elements don't have references, prefer
+    PopFrontUnsafe. Calling this method with an empty Deque leads to undefined
+    behavior from then on.
+
+func (d *Deque[T]) PushBack(ts ...T)
+    PushBack takes in a variable number of arguments and puts them at the back
+    of the Deque. Use PushBack and PopFront for FIFO ordering, or PushBack and
+    PopBack for LIFO ordering.
+
+    PushBack reallocates at most once, no matter how many arguments. It is more
+    efficient to push multiple elements at once. The last argument is the new
+    back of the list.
+
+func (d *Deque[T]) PushFront(ts ...T)
+    PushFront takes in a variable number of arguments and puts them at the front
+    of the Deque.
+
+    PushFront reallocates at most once, no matter how many arguments. It is more
+    efficient to push multiple elements at once. The last argument is the new
+    front of the list.
+
+func (d *Deque[T]) Reserve(n int) error
+    Reserve ensures there's enough capacity to add at least n more elements to
+    the Deque, reallocating if necessary. It returns an error if n is negative.
+
+func (d *Deque[T]) Resize(minCapacity int) error
+    Resize takes in the minimum desired capacity, rounds it up to a power of
+    two, and reallocates the underlying buffer.
+
+    It returns an error if the new capacity matches the old, or if the new
+    capacity cannot hold the existing elements, or if minCapacity is negative.
+
+func (d *Deque[T]) Set(i int, t T)
+    Set writes t to the i-th position in the Deque. Panics if out of bounds.
+
+func (d *Deque[T]) SetUnsafe(i int, t T)
+    SetUnsafe writes t to the i-th position in the Deque. It never panics,
+    but writes to another index inside the deque if out of bounds.
+
+func (d *Deque[T]) Shrink() uint
+    Shrink reallocates the underlying slice to the smallest size possible and
+    returns the new Deque's capacity.
+
+func (d *Deque[T]) Swap(i, j int)
+    Swap swaps the elements in the i-th and j-th indexes. Panics if out of
+    bounds.
+
+func (d *Deque[T]) SwapUnsafe(i, j int)
+    SwapUnsafe swaps the elements in the i-th and j-th indexes. It never panics,
+    but swaps the wrong elements if indexes are out of bounds.
+
